@@ -1,0 +1,324 @@
+---
+title: "Lab 3: COVID-19"
+subtitle: 'Ecosystem Science and Sustainability 330'
+author:
+  - name: Chippy Marx
+    email: mchippy@colostate.ed
+    url: https://mchippy01.github.io
+format: html
+---
+#Loading necessary libraries 
+```{r}
+#| message: false
+library(tidyverse)
+library(flextable)
+library(zoo)
+library(knitr)
+library(lubridate)
+```
+Load data 
+```{r}
+#| message: false
+url = "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv"
+covid = read_csv(url)
+```
+Question 1:Take a moment to reflect on the value of open data: How does easy access to historical and real-time environmental data shape our understanding of climate trends, resource management, and public health? What happens when this data disappears or becomes inaccessible? The role of independent archiving and collaborative stewardship has never been more critical in ensuring scientific progress and accountability.
+
+Question 2 
+```{r}
+covid$date <- as.Date(covid$date)
+start.date <- as.Date("2022-02-01")
+class(start.date)
+my.state <- "Colorado"
+
+CO_data <- covid %>%
+  filter(state == "Colorado") %>%
+  group_by(county) %>%
+  mutate(new_cases = cases - lag(cases), new_deaths = deaths - lag(deaths))
+colnames(CO_data)
+
+CO_data_wsd <- CO_data %>%
+  filter(date == start.date) 
+
+CO_data_most <- CO_data_wsd %>%
+  arrange(desc(cases))%>%
+  select(county, cases) %>%
+  head(5)
+
+flextable(CO_data_most)%>%
+  set_header_labels(county = "County", cases = "Total Cases ") %>%
+  set_caption(("Counties in Colorado with the Most Cumulative COVID-19 Cases ")) %>%
+  theme_box() 
+
+
+```
+counties with most cases 
+```{r}
+CO_data_MR <- CO_data_wsd %>%
+  arrange(desc(new_cases)) %>%
+  select(county, new_cases) %>% 
+  head(5)
+glimpse(CO_data_MR)
+
+flextable(CO_data_MR) %>%
+  set_header_labels(county= "County", new_cases = "New Cases ") %>%
+  set_caption("Counties in Colorado  with the most recent cases COVID-19 cases ") %>%
+  theme_box()
+```
+
+
+Merging data 
+```{r}
+pop_url <- 'https://www2.census.gov/programs-surveys/popest/datasets/2020-2023/counties/totals/co-est2023-alldata.csv'
+pop_data <- read_csv(pop_url)
+pop_data <- pop_data %>%
+  mutate(STATE = sprintf("%02s", STATE), 
+         COUNTY = sprintf("%03s", COUNTY),
+         fips = paste0(STATE, COUNTY)) 
+CO_pop <- pop_data %>%
+  rename(population = POPESTIMATE2021)
+
+pop_range <- range(CO_pop$population, na.rm = TRUE)
+pop_range
+
+CO_merged <- CO_data_wsd %>%
+  left_join(CO_pop, by = "fips")
+colnames(CO_merged)
+
+CO_merged_AD <- CO_data %>%
+  left_join(CO_pop, by = "fips" )
+
+```
+```
+the popilation range is 54-39145060
+
+findinf the per capita cases and new cases 
+
+```{r}
+CO_merged <- CO_merged %>%
+  mutate(
+    cases_per_100k = cases / (population / 100000), 
+    new_cases_per_100k = new_cases / (population / 100000) 
+  )
+
+CO_merged_AD <- CO_merged_AD %>%
+  mutate(
+    cases_per_100k = cases / (population / 100000), 
+    new_cases_per_100k = new_cases / (population / 100000) 
+  )
+```
+findinf the top 5 counties with highest cululative cases per capita 
+```{r}
+top_cumulative_cases <- CO_merged %>%
+  group_by(county) %>%  # Group by county to avoid duplicates
+  summarize(
+    total_cases = sum(cases, na.rm = TRUE),  
+    population = max(population, na.rm = TRUE),  
+    cases_per_100k = (total_cases / population) * 100000  
+  ) %>%
+  arrange(desc(cases_per_100k)) %>%
+  slice_max(order_by = cases_per_100k, n = 5, with_ties = FALSE)  
+
+
+table3 <- flextable(top_cumulative_cases) %>% 
+  set_header_labels(
+    county = "County",
+    total_cases = "Total Cases",
+    population = "Population",
+    cases_per_100k = "Cases per 100,000"
+  ) %>%
+  theme_box() %>%
+  autofit()
+
+
+print(table3)
+
+```
+
+
+Top 5 counties with highest new cases per capita 
+```{r}
+top_new_cases <- CO_merged %>%
+  slice_max(order_by = new_cases_per_100k, n = 5, with_ties = FALSE) %>%
+  select(county, new_cases, population, new_cases_per_100k)
+
+
+table4 <- flextable(top_new_cases) %>%
+  set_header_labels(
+    county = "County",
+    new_cases = "New Cases",
+    population = "Population",
+    new_cases_per_100k = "New Cases per 100,000"
+  ) %>%
+  theme_box() %>%
+  autofit()
+
+
+print(table4)
+
+```
+
+
+question 4 
+
+```{r}
+
+
+```
+
+
+
+question 5 
+
+
+
+what hat says 
+```{r}
+
+
+
+colnames(CO_merged_AD)
+
+
+CO_2021_deaths <- CO_merged_AD %>%
+  mutate(year = year(date)) %>%
+  filter(year == 2021) %>%
+  group_by(county) %>%
+  summarize(total_covid_deaths = sum(new_deaths, na.rm = TRUE))  
+
+
+census_deaths <- CO_merged_AD %>%
+  select(county, DEATHS2021) %>%
+  distinct()
+
+
+CO_death_analysis <- CO_2021_deaths %>%
+  left_join(census_deaths, by = "county") %>% 
+  mutate(covid_death_pct = (total_covid_deaths / DEATHS2021) * 100)
+
+ 
+high_covid_impact <- CO_death_analysis %>%
+  filter(covid_death_pct >= 20)
+
+ggplot(high_covid_impact, aes(x = reorder(county, covid_death_pct), y = covid_death_pct)) +
+  geom_col(fill = "red", alpha = 0.7) +
+  coord_flip() +  
+  labs(
+    title = "Counties where COVID-19 Deaths ≥ 20% of Total Deaths (2021)",
+    x = "County",
+    y = "Percentage of Deaths Attributed to COVID-19"
+  ) +
+  theme_minimal()
+  
+```
+question 6 
+
+```{r}
+covid <- covid %>%
+  mutate(date = as.Date(date))
+
+state_covid <- covid %>%
+  group_by(state, date) %>%
+  summarize( daily_cases = sum(cases, na.rm = TRUE),.groups = "drop") %>%
+  arrange(state, date) %>%
+  mutate(new_cases = daily_cases - lag(daily_cases) )
+
+selected_states <- c("New York", "Colorado", "Alabama", "Ohio")
+
+state_covid_filtered <- state_covid %>%
+  filter(state %in% selected_states) %>%
+  group_by(state) %>%
+  arrange(state, date) %>%
+  mutate(
+    new_cases_7day_avg = rollmean(new_cases, k = 7, fill = NA, align = "right")
+  ) %>%
+  ungroup()
+
+
+population_state <- pop_data %>%
+  select(STNAME, POPESTIMATE2021) %>%
+  rename(state = STNAME, population = POPESTIMATE2021) %>%
+  filter(state %in% selected_states)
+  
+population_state <- population_state %>%
+  group_by(state) %>%
+  summarize(population = max(population, na.rm = TRUE))
+
+
+state_covid_scaled <- state_covid_filtered %>%
+  left_join(population_state, by = "state") %>%
+  mutate(
+    new_cases_per_capita = (new_cases / population) * 100000,
+    new_cases_per_capita_7day_avg = rollmean(new_cases_per_capita, k = 7, fill = NA, align = "right")
+  )
+
+library(ggplot2)
+
+ggplot(state_covid_scaled, aes(x = date, y = new_cases, fill = state)) +
+  geom_col(alpha = 0.5, show.legend = FALSE) +  
+  geom_line(aes(y = new_cases_7day_avg, color = state), size = 1.2) + 
+  facet_wrap(~ state, scales = "free_y") +
+  labs(
+    title = "Daily New COVID-19 Cases in Selected States",
+    subtitle = "With 7-Day Rolling Average",
+    x = "Date",
+    y = "New Cases",
+    caption = "Source: NY Times COVID-19 Data, US Census"
+  ) +
+  theme_minimal() 
+
+   
+```
+ 
+ question 7 
+ 
+```{r}
+location_url <- 'https://raw.githubusercontent.com/mikejohnson51/csu-ess-330/refs/heads/main/resources/county-centroids.csv'
+
+location <-  read_csv (location_url)
+
+Covid_location <- covid  %>%
+  left_join(location, by = "fips")
+  
+Covid_location <- Covid_location %>%
+  mutate(date = as.Date(date))
+
+
+Covid_location <- Covid_location %>%
+  arrange(date) %>%
+   mutate(
+   new_cases = cases - lag(cases),  
+    new_cases = replace_na(new_cases, 0),
+    new_deaths = deaths - lag(deaths),  
+    new_deaths = replace_na(new_deaths, 0),  
+    cumulative_cases = cumsum(new_cases) 
+  )
+
+colnames(Covid_location)
+
+weighted_center <- Covid_location %>%
+  group_by(date) %>%
+  summarise(
+    total_cases = sum(cumulative_cases, na.rm = TRUE),
+    X_coord = sum(LON * cumulative_cases, na.rm = TRUE) / sum(cumulative_cases, na.rm = TRUE),
+    Y_coord = sum(LAT * cumulative_cases, na.rm = TRUE) / sum(cumulative_cases, na.rm = TRUE)
+  )
+
+weighted_center <- weighted_center %>%
+  mutate(month = lubridate::month(date, label = TRUE))
+library(ggplot2)
+library(sf)
+library(maps)
+
+usa <- map_data("state")
+ggplot() +
+  geom_polygon(data = usa, aes(x = long, y = lat, group = group), fill = "gray90", color = "white") +
+  geom_point(data = weighted_center, aes(x = X_coord, y = Y_coord, color = factor(month), size = total_cases), alpha = 0.7) +
+  scale_color_brewer(palette = "Dark2", name = "Month") +
+  scale_size_continuous(name = "Total Cases", range = c(2, 10)) +
+  labs(title = "Weighted Mean Center of COVID-19 Cases Over Time",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal() +
+  coord_fixed(1.3)
+```
+ 
