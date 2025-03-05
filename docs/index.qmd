@@ -7,7 +7,9 @@ author:
     url: https://mchippy01.github.io
 format: html
 ---
-#Loading necessary libraries 
+
+First I need to load the necessary libraries
+
 ```{r}
 #| message: false
 library(tidyverse)
@@ -15,44 +17,54 @@ library(flextable)
 library(zoo)
 library(knitr)
 library(lubridate)
+library(sf)
+library(maps)
+library(patchwork)
 ```
-Load data 
+
+Load data
+
 ```{r}
 #| message: false
 url = "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv"
 covid = read_csv(url)
 ```
-Question 1:Take a moment to reflect on the value of open data: How does easy access to historical and real-time environmental data shape our understanding of climate trends, resource management, and public health? What happens when this data disappears or becomes inaccessible? The role of independent archiving and collaborative stewardship has never been more critical in ensuring scientific progress and accountability.
 
-Question 2 
+**Question 1:** *Open data has profound implications for all areas of science. Open data has specific implication for climate science, resource management, and public health. Scientific advancement relies heavily on open data. Access to environmental data helps scientists analyze long-term patterns in climate indicator. Historical data allows scientists to see how the climate has changed over time, and provides context for the accelerated changes we see today. There is no going back in time, so open access of historical climate access is crucial to allowing scientists to understand climate trends and see the full picture of the climate crisis. For natural resource management open data allows researchers to have access to past and current data that can inform their own research, or can inform policy. With this case, I think about the need for data in restoration projects. An important component of a restoration project is having a reference site. Having easily accessible data allows a researcher to comb through sites and find the right fit, ultimately informing project goals. Environmental data is also integral to public health. This is because data on environmental factors can be used to inform and issue timely warnings to citizens, warnings that could ultimately save lives. When environmental data, or any data, because inaccessible or disappears, society loses crucial tools for decision making. When we lose open data, we put ourselves as a society backwards, and prevent progress in a world where progress is more important then ever.*
+
+**Question 2**
+
 ```{r}
 covid$date <- as.Date(covid$date)
 start.date <- as.Date("2022-02-01")
-class(start.date)
 my.state <- "Colorado"
 
 CO_data <- covid %>%
   filter(state == "Colorado") %>%
   group_by(county) %>%
-  mutate(new_cases = cases - lag(cases), new_deaths = deaths - lag(deaths))
-colnames(CO_data)
+  mutate(new_cases = cases - lag(cases), new_deaths = deaths - lag(deaths)) %>%
+  filter(!is.na(new_cases))
+
 
 CO_data_wsd <- CO_data %>%
-  filter(date == start.date) 
+  filter(date <= start.date) 
+
+#Finding Colorado Counties with the most cumulative cases 
 
 CO_data_most <- CO_data_wsd %>%
-  arrange(desc(cases))%>%
-  select(county, cases) %>%
-  head(5)
+  group_by(county) %>%
+  summarise(cumulative_cases = sum(cases, na.rm = TRUE)) %>%  
+  slice_max(order_by = cumulative_cases, n = 5) %>%  
+  ungroup()  
 
 flextable(CO_data_most)%>%
-  set_header_labels(county = "County", cases = "Total Cases ") %>%
-  set_caption(("Counties in Colorado with the Most Cumulative COVID-19 Cases ")) %>%
+  set_header_labels(county = "County", cumulative_cases = "Cumulative Cases ") %>%
+  set_caption(("Counties in Colorado with the Most Cumulative COVID-19 as of 02-01-2022 ")) %>%
   theme_box() 
-
-
 ```
-counties with most cases 
+
+Counties in Colorado with the most recent COVID-19 cases.
+
 ```{r}
 CO_data_MR <- CO_data_wsd %>%
   arrange(desc(new_cases)) %>%
@@ -62,12 +74,16 @@ glimpse(CO_data_MR)
 
 flextable(CO_data_MR) %>%
   set_header_labels(county= "County", new_cases = "New Cases ") %>%
-  set_caption("Counties in Colorado  with the most recent cases COVID-19 cases ") %>%
+  set_caption("Counties in Colorado  with the most new cases COVID-19 cases on 02-01-2022 ") %>%
   theme_box()
 ```
 
+*Text report: I found that there are high cumulative cases on 02-01-2022 in counties in Colorado, with the most cumulative cases being 36,468,482 in Denver county. Denver county also has the most new cases, with 7,795. I do the calculations for safe counties further down, and found that by the criteria of less than 100 new cases per 100,000 people, there are no safe counties. Looking at the cumulative and new cases across the counties, it seems that because the population range is so big, it could be why Denver ends up having the most cumulative and new cases. Therefor, for more clear data, we will scale the cases to population in the next question.*
 
-Merging data 
+**Question 3**
+
+Merging COVID and population data
+
 ```{r}
 pop_url <- 'https://www2.census.gov/programs-surveys/popest/datasets/2020-2023/counties/totals/co-est2023-alldata.csv'
 pop_data <- read_csv(pop_url)
@@ -75,49 +91,53 @@ pop_data <- pop_data %>%
   mutate(STATE = sprintf("%02s", STATE), 
          COUNTY = sprintf("%03s", COUNTY),
          fips = paste0(STATE, COUNTY)) 
+
 CO_pop <- pop_data %>%
-  rename(population = POPESTIMATE2021)
+  rename(population = POPESTIMATE2021) %>%
+  filter(STNAME == "Colorado")
 
 pop_range <- range(CO_pop$population, na.rm = TRUE)
 pop_range
 
 CO_merged <- CO_data_wsd %>%
   left_join(CO_pop, by = "fips")
-colnames(CO_merged)
+
 
 CO_merged_AD <- CO_data %>%
   left_join(CO_pop, by = "fips" )
 
 ```
-```
-the popilation range is 54-39145060
 
-findinf the per capita cases and new cases 
+*The population range is 741-5811596 people across the counties in Colorado.*
+
+Finding the per capita cases and new cases in counties in Colorado
 
 ```{r}
 CO_merged <- CO_merged %>%
   mutate(
-    cases_per_100k = cases / (population / 100000), 
-    new_cases_per_100k = new_cases / (population / 100000) 
+    cases_per_capita = cases / population,
+    new_cases_per_capita  = new_cases / population
   )
 
 CO_merged_AD <- CO_merged_AD %>%
   mutate(
-    cases_per_100k = cases / (population / 100000), 
-    new_cases_per_100k = new_cases / (population / 100000) 
+    cases_per_capita = cases / population,
+    new_cases_per_capita = new_cases / population
   )
 ```
-findinf the top 5 counties with highest cululative cases per capita 
+
+Finding the top 5 counties in Colorado with highest cumulative cases per capita
+
 ```{r}
 top_cumulative_cases <- CO_merged %>%
-  group_by(county) %>%  # Group by county to avoid duplicates
+  group_by(county) %>%  
   summarize(
     total_cases = sum(cases, na.rm = TRUE),  
     population = max(population, na.rm = TRUE),  
-    cases_per_100k = (total_cases / population) * 100000  
+    cases_per_capita = (total_cases / population) 
   ) %>%
-  arrange(desc(cases_per_100k)) %>%
-  slice_max(order_by = cases_per_100k, n = 5, with_ties = FALSE)  
+  arrange(desc(cases_per_capita)) %>%
+  slice_max(order_by = cases_per_capita, n = 5, with_ties = FALSE)  
 
 
 table3 <- flextable(top_cumulative_cases) %>% 
@@ -125,9 +145,10 @@ table3 <- flextable(top_cumulative_cases) %>%
     county = "County",
     total_cases = "Total Cases",
     population = "Population",
-    cases_per_100k = "Cases per 100,000"
+    cases_per_capita = "Cases per Capita"
   ) %>%
   theme_box() %>%
+  set_caption("Colorado Counties With the Most Cumulative COVID-19 cases per capita on 02-01-2022")%>%
   autofit()
 
 
@@ -135,22 +156,35 @@ print(table3)
 
 ```
 
+Top 5 counties with highest new cases per capita
 
-Top 5 counties with highest new cases per capita 
 ```{r}
+top_new_cases <-  CO_merged %>%
+  select(county, new_cases, population, new_cases_per_capita) %>%
+  slice_max(order_by = new_cases_per_capita, n = 5, with_ties = FALSE)
+  
+
 top_new_cases <- CO_merged %>%
-  slice_max(order_by = new_cases_per_100k, n = 5, with_ties = FALSE) %>%
-  select(county, new_cases, population, new_cases_per_100k)
+  group_by(county) %>%  
+  summarize(
+    total_new_cases = sum(new_cases, na.rm = TRUE),  
+    population = max(population, na.rm = TRUE),  
+    new_cases_per_capita = (total_new_cases / population) 
+  ) %>%
+  arrange(desc(new_cases_per_capita)) %>%
+  slice_max(order_by = new_cases_per_capita, n = 5, with_ties = FALSE)  
+
 
 
 table4 <- flextable(top_new_cases) %>%
   set_header_labels(
     county = "County",
-    new_cases = "New Cases",
+    total_new_cases = "New Cases",
     population = "Population",
-    new_cases_per_100k = "New Cases per 100,000"
+    new_cases_per_capita = "New Cases per Capita"
   ) %>%
   theme_box() %>%
+  set_caption("Counties in Colorado with the most new cases on 02-01-2022")%>%
   autofit()
 
 
@@ -158,26 +192,67 @@ print(table4)
 
 ```
 
-
-question 4 
+**Question 4**
 
 ```{r}
+CO_merged_AD$date <- as.Date(CO_merged_AD$date)  
 
+start_14_days <- start.date - 13
+
+CO_last_14_days <- CO_merged_AD %>%
+  filter(date >= start_14_days & date <= start.date)
+
+CO_summary <- CO_last_14_days %>%
+  group_by(county) %>%
+  summarize(total_new_cases = sum(new_cases, na.rm = TRUE), population = max(population, na.rm = TRUE)) %>%
+  mutate(new_cases_per_100k = total_new_cases / (population / 100000))
+
+
+top_5_counties <- CO_summary %>%
+  slice_max(order_by = new_cases_per_100k, n = 5) %>%
+  select(county, total_new_cases, population, new_cases_per_100k) 
+
+table5 <- flextable(top_5_counties) %>%
+  set_header_labels(
+    county = "County",
+    total_new_cases = "New Cases",
+    population = "Population",
+    new_cases_per_100k = "New Cases per 100,000"
+  ) %>%
+  theme_box() %>%
+  set_caption("Counties in Colorado with the most cases per 100,000 residents ")%>%
+  autofit()
+print(table5)
 
 ```
 
+Watch list counties
 
-
-question 5 
-
-
-
-what hat says 
 ```{r}
+watch_list_count <- CO_summary %>%
+  filter(new_cases_per_100k > 100) %>%
+  arrange(desc(new_cases_per_100k))
 
 
+table_watchlist <- flextable(watch_list_count) %>%
+  set_header_labels(
+    county = "County",
+    total_new_cases = "Total New Cases (Last 14 Days)",
+    population = "Population",
+    new_cases_per_100k = "New Cases per 100,000"
+  ) %>%
+  theme_box() %>%
+  set_caption("Watchlist Colorado counties") %>%
+  autofit()
 
-colnames(CO_merged_AD)
+print(table_watchlist)
+```
+
+*On this date, 02-01-2022, all 64 counties in Colorado had more than 100 new cases per 100,000 residents. Under those criteria, all counties match watch list conditions, and no county is "safe"*
+
+**Question 5**
+
+```{r}
 
 
 CO_2021_deaths <- CO_merged_AD %>%
@@ -204,14 +279,15 @@ ggplot(high_covid_impact, aes(x = reorder(county, covid_death_pct), y = covid_de
   geom_col(fill = "red", alpha = 0.7) +
   coord_flip() +  
   labs(
-    title = "Counties where COVID-19 Deaths ≥ 20% of Total Deaths (2021)",
+    title = "Counties in Colorado where COVID-19 Deaths ≥ 20% of Total Deaths (2021)",
     x = "County",
     y = "Percentage of Deaths Attributed to COVID-19"
   ) +
   theme_minimal()
   
 ```
-question 6 
+
+**Question 6**
 
 ```{r}
 covid <- covid %>%
@@ -221,7 +297,7 @@ state_covid <- covid %>%
   group_by(state, date) %>%
   summarize( daily_cases = sum(cases, na.rm = TRUE),.groups = "drop") %>%
   arrange(state, date) %>%
-  mutate(new_cases = daily_cases - lag(daily_cases) )
+  mutate(new_cases = pmax(0, daily_cases - lag(daily_cases) ))
 
 selected_states <- c("New York", "Colorado", "Alabama", "Ohio")
 
@@ -248,77 +324,118 @@ population_state <- population_state %>%
 state_covid_scaled <- state_covid_filtered %>%
   left_join(population_state, by = "state") %>%
   mutate(
-    new_cases_per_capita = (new_cases / population) * 100000,
-    new_cases_per_capita_7day_avg = rollmean(new_cases_per_capita, k = 7, fill = NA, align = "right")
+    new_cases_per_100k = (new_cases / (population / 100000)),
+    new_cases_per_capita_7day_avg = rollmean(new_cases_per_100k, k = 7, fill = NA, align = "right")
   )
 
-library(ggplot2)
+filter(state_covid_scaled, new_cases_per_capita_7day_avg < 0)
 
-ggplot(state_covid_scaled, aes(x = date, y = new_cases, fill = state)) +
-  geom_col(alpha = 0.5, show.legend = FALSE) +  
-  geom_line(aes(y = new_cases_7day_avg, color = state), size = 1.2) + 
-  facet_wrap(~ state, scales = "free_y") +
+ggplot(state_covid_scaled, aes(x = date, y = new_cases_per_capita_7day_avg, color = state)) +
+  geom_line(size = 1.2) + 
   labs(
-    title = "Daily New COVID-19 Cases in Selected States",
-    subtitle = "With 7-Day Rolling Average",
+    title = "7-Day Rolling Average of COVID-19 Cases Per Capita in Selected States",
     x = "Date",
-    y = "New Cases",
-    caption = "Source: NY Times COVID-19 Data, US Census"
+    y = "New Cases per Capita (7-Day Avg)",
   ) +
-  theme_minimal() 
+  scale_color_brewer(palette = "Set1") +
+  theme_minimal() +
+  theme(
+    legend.title = element_blank(),
+    legend.position = "bottom",
+  )
+
 
    
 ```
- 
- question 7 
- 
+
+*In this question, when we normalized data to population, the data became more comprehensive. Since some states have so many more people, they will have more cases as a result. However when we normalize the data to population, we see that all of the states have relatively similar cases and trends.*
+
+**Question 7**
+
 ```{r}
 location_url <- 'https://raw.githubusercontent.com/mikejohnson51/csu-ess-330/refs/heads/main/resources/county-centroids.csv'
 
-location <-  read_csv (location_url)
-
-Covid_location <- covid  %>%
-  left_join(location, by = "fips")
-  
-Covid_location <- Covid_location %>%
-  mutate(date = as.Date(date))
+location <-  read_csv(location_url)
 
 
-Covid_location <- Covid_location %>%
-  arrange(date) %>%
-   mutate(
-   new_cases = cases - lag(cases),  
-    new_cases = replace_na(new_cases, 0),
-    new_deaths = deaths - lag(deaths),  
-    new_deaths = replace_na(new_deaths, 0),  
-    cumulative_cases = cumsum(new_cases) 
-  )
-
-colnames(Covid_location)
-
-weighted_center <- Covid_location %>%
-  group_by(date) %>%
-  summarise(
-    total_cases = sum(cumulative_cases, na.rm = TRUE),
-    X_coord = sum(LON * cumulative_cases, na.rm = TRUE) / sum(cumulative_cases, na.rm = TRUE),
-    Y_coord = sum(LAT * cumulative_cases, na.rm = TRUE) / sum(cumulative_cases, na.rm = TRUE)
-  )
-
-weighted_center <- weighted_center %>%
-  mutate(month = lubridate::month(date, label = TRUE))
-library(ggplot2)
-library(sf)
-library(maps)
+weighted_center_cases = inner_join(covid, location) %>% 
+  group_by(date) %>% 
+  summarize(X_coord = sum(LON *cases) / sum(cases),
+            Y_coord = sum(LAT *cases) / sum(cases),
+            total_cases = sum(cases)) %>% 
+  ungroup() %>% 
+  mutate(Month = as.factor(lubridate::month(date)))
 
 usa <- map_data("state")
 ggplot() +
   geom_polygon(data = usa, aes(x = long, y = lat, group = group), fill = "gray90", color = "white") +
-  geom_point(data = weighted_center, aes(x = X_coord, y = Y_coord, color = factor(month), size = total_cases), alpha = 0.7) +
+  geom_point(data = weighted_center_cases, aes(x = X_coord, y = Y_coord, color = Month, size = total_cases), alpha = 0.7) +
   scale_color_brewer(palette = "Dark2", name = "Month") +
+  scale_size_continuous(name = "Total Cases", range = c(2, 10)) +
+  labs(title = "Weighted Mean Center of COVID-19 Cases Over Time in 2021",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 12)) +
+  coord_fixed(1.3) +
+  guides(
+    size = guide_legend(position = "bottom"), 
+    color = guide_legend(position = "right")  
+  )
+
+```
+
+*Based on the above graph, the biggest COVID outbreaks in the US seem to be largely concentrated over the middle of the country. This makes sense based off what I remember of the pandemic. Also, the middle of the country is, in my opinion, known for more distrust of government, and at this time, that correlated with distrust in vaccines. By 2021 in the pandemic, a lot of the more populated states that got hit really early on had higher vaccine rates when they came out in early 2021. With the rural U.S (central US), there are also unique struggles with health care that likely contributed to this.*
+
+**Question 8**
+
+```{r}
+weighted_center_deaths <- covid %>% 
+  inner_join(location, by = join_by(fips))%>% 
+  group_by(date) %>% 
+  summarize(X_coord = sum(LON *deaths) / sum(deaths),
+            Y_coord = sum(LAT *deaths) / sum(deaths),
+            total_deaths = sum(deaths)) %>% 
+   mutate(Month = as.factor(lubridate::month(date)))%>%
+  ungroup()
+
+
+weighted_centers_cases <- weighted_center_cases %>%
+  mutate(type = "Cases")
+
+weighted_centers <- bind_rows(weighted_center_cases, weighted_center_deaths)
+
+```
+
+```{r}
+plot_1  <- ggplot() +
+  geom_polygon(data = usa, aes(x = long, y = lat, group = group), fill = "gray90", color = "white") +
+  geom_point(data = weighted_center_cases, aes(x = X_coord, y = Y_coord, size = total_cases), color = "red",  alpha = 0.7) +
   scale_size_continuous(name = "Total Cases", range = c(2, 10)) +
   labs(title = "Weighted Mean Center of COVID-19 Cases Over Time",
        x = "Longitude", y = "Latitude") +
   theme_minimal() +
-  coord_fixed(1.3)
+  theme(
+     plot.title = element_text(size = 7, hjust = 0.5),  
+    legend.title = element_text(size = 5) 
+  )+
+  coord_fixed(1.3) +
+  guides(size = guide_legend(position = "bottom"))  
+
+plot_2  <- ggplot() +
+  geom_polygon(data = usa, aes(x = long, y = lat, group = group), fill = "gray90", color = "white") +
+  geom_point(data = weighted_center_deaths, aes(x = X_coord, y = Y_coord, size = total_deaths), color = "blue",  alpha = 0.7) +
+  scale_size_continuous(name = "Total Deaths", range = c(2, 10)) +
+  labs(title = "Weighted Mean Center of COVID-19 Deaths Over Time",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 7, hjust = 0.5),  
+    legend.title = element_text(size = 5) 
+  )+
+  coord_fixed(1.3) +
+  guides(size = guide_legend(position = "bottom"))  
+
+plot_1 + plot_2
 ```
- 
+
+*As I already explained with the weighted mean center of COVID-19 cases in the problem above, it makes sense that cases and deaths were concentrated in the central US. I think death are even more so because of a lack of healthcare access in the central US. That combined with lower vaccine rates would lead deaths from COVID-19 to be worse in central US.*
