@@ -8,7 +8,11 @@ author:
 format: html
 ---
 
+
+
 First I need to load the necessary libraries
+
+
 
 ```{r}
 #| message: false
@@ -22,7 +26,11 @@ library(maps)
 library(patchwork)
 ```
 
+
+
 Load data
+
+
 
 ```{r}
 #| message: false
@@ -30,9 +38,13 @@ url = "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-countie
 covid = read_csv(url)
 ```
 
+
+
 **Question 1:** *Open data has profound implications for all areas of science. Open data has specific implication for climate science, resource management, and public health. Scientific advancement relies heavily on open data. Access to environmental data helps scientists analyze long-term patterns in climate indicator. Historical data allows scientists to see how the climate has changed over time, and provides context for the accelerated changes we see today. There is no going back in time, so open access of historical climate access is crucial to allowing scientists to understand climate trends and see the full picture of the climate crisis. For natural resource management open data allows researchers to have access to past and current data that can inform their own research, or can inform policy. With this case, I think about the need for data in restoration projects. An important component of a restoration project is having a reference site. Having easily accessible data allows a researcher to comb through sites and find the right fit, ultimately informing project goals. Environmental data is also integral to public health. This is because data on environmental factors can be used to inform and issue timely warnings to citizens, warnings that could ultimately save lives. When environmental data, or any data, because inaccessible or disappears, society loses crucial tools for decision making. When we lose open data, we put ourselves as a society backwards, and prevent progress in a world where progress is more important then ever.*
 
 **Question 2**
+
+
 
 ```{r}
 covid$date <- as.Date(covid$date)
@@ -63,7 +75,11 @@ flextable(CO_data_most)%>%
   theme_box() 
 ```
 
+
+
 Counties in Colorado with the most recent COVID-19 cases.
+
+
 
 ```{r}
 CO_data_MR <- CO_data_wsd %>%
@@ -78,11 +94,15 @@ flextable(CO_data_MR) %>%
   theme_box()
 ```
 
+
+
 *Text report: I found that there are high cumulative cases on 02-01-2022 in counties in Colorado, with the most cumulative cases being 36,468,482 in Denver county. Denver county also has the most new cases, with 7,795. I do the calculations for safe counties further down, and found that by the criteria of less than 100 new cases per 100,000 people, there are no safe counties. Looking at the cumulative and new cases across the counties, it seems that because the population range is so big, it could be why Denver ends up having the most cumulative and new cases. Therefor, for more clear data, we will scale the cases to population in the next question.*
 
 **Question 3**
 
 Merging COVID and population data
+
+
 
 ```{r}
 pop_url <- 'https://www2.census.gov/programs-surveys/popest/datasets/2020-2023/counties/totals/co-est2023-alldata.csv'
@@ -108,9 +128,13 @@ CO_merged_AD <- CO_data %>%
 
 ```
 
+
+
 *The population range is 741-5811596 people across the counties in Colorado.*
 
 Finding the per capita cases and new cases in counties in Colorado
+
+
 
 ```{r}
 CO_merged <- CO_merged %>%
@@ -126,7 +150,11 @@ CO_merged_AD <- CO_merged_AD %>%
   )
 ```
 
+
+
 Finding the top 5 counties in Colorado with highest cumulative cases per capita
+
+
 
 ```{r}
 top_cumulative_cases <- CO_merged %>%
@@ -152,7 +180,11 @@ table3 <- flextable(top_cumulative_cases) %>%
 table3
 ```
 
+
+
 Top 5 counties with highest new cases per capita
+
+
 
 ```{r}
 top_new_cases <-  CO_merged %>%
@@ -188,7 +220,11 @@ table4
 
 ```
 
+
+
 **Question 4**
+
+
 
 ```{r}
 CO_merged_AD$date <- as.Date(CO_merged_AD$date)  
@@ -222,7 +258,11 @@ table5 <- flextable(top_5_counties) %>%
 table5
 ```
 
+
+
 Watch list counties
+
+
 
 ```{r}
 watch_list_count <- CO_summary %>%
@@ -243,9 +283,13 @@ table_watchlist <- flextable(watch_list_count) %>%
 table_watchlist
 ```
 
+
+
 *On this date, 02-01-2022, all 64 counties in Colorado had more than 100 new cases per 100,000 residents. Under those criteria, all counties match watch list conditions, and no county is "safe"*
 
 **Question 5**
+
+
 
 ```{r}
 
@@ -282,7 +326,11 @@ ggplot(high_covid_impact, aes(x = reorder(county, covid_death_pct), y = covid_de
   
 ```
 
+
+
 **Question 6**
+
+
 
 ```{r}
 covid <- covid %>%
@@ -343,9 +391,13 @@ ggplot(state_covid_scaled, aes(x = date, y = new_cases_per_capita_7day_avg, colo
    
 ```
 
+
+
 *In this question, when we normalized data to population, the data became more comprehensive. Since some states have so many more people, they will have more cases as a result. However when we normalize the data to population, we see that all of the states have relatively similar cases and trends.*
 
 **Question 7**
+
+
 
 ```{r}
 location_url <- 'https://raw.githubusercontent.com/mikejohnson51/csu-ess-330/refs/heads/main/resources/county-centroids.csv'
@@ -379,9 +431,13 @@ ggplot() +
 
 ```
 
+
+
 *Based on the above graph, the biggest COVID outbreaks in the US seem to be largely concentrated over the middle of the country. This makes sense based off what I remember of the pandemic. Also, the middle of the country is, in my opinion, known for more distrust of government, and at this time, that correlated with distrust in vaccines. By 2021 in the pandemic, a lot of the more populated states that got hit really early on had higher vaccine rates when they came out in early 2021. With the rural U.S (central US), there are also unique struggles with health care that likely contributed to this.*
 
 **Question 8**
+
+
 
 ```{r}
 weighted_center_deaths <- covid %>% 
@@ -433,4 +489,7 @@ plot_2  <- ggplot() +
 plot_1 + plot_2
 ```
 
+
+
 *As I already explained with the weighted mean center of COVID-19 cases in the problem above, it makes sense that cases and deaths were concentrated in the central US. I think death are even more so because of a lack of healthcare access in the central US. That combined with lower vaccine rates would lead deaths from COVID-19 to be worse in central US.*
+
