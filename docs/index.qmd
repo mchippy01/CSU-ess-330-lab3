@@ -140,19 +140,6 @@ top_cumulative_cases <- CO_merged %>%
   slice_max(order_by = cases_per_capita, n = 5, with_ties = FALSE)  
 
 
-table3 <- flextable(top_cumulative_cases) %>% 
-  set_header_labels(
-    county = "County",
-    total_cases = "Total Cases",
-    population = "Population",
-    cases_per_capita = "Cases per Capita"
-  ) %>%
-  theme_box() %>%
-  set_caption("Colorado Counties With the Most Cumulative COVID-19 cases per capita on 02-01-2022")%>%
-  autofit()
-
-
-print(table3)
 
 ```
 
@@ -188,7 +175,7 @@ table4 <- flextable(top_new_cases) %>%
   autofit()
 
 
-print(table4)
+table4
 
 ```
 
@@ -222,8 +209,8 @@ table5 <- flextable(top_5_counties) %>%
   theme_box() %>%
   set_caption("Counties in Colorado with the most cases per 100,000 residents ")%>%
   autofit()
-print(table5)
 
+table5
 ```
 
 Watch list counties
@@ -244,8 +231,7 @@ table_watchlist <- flextable(watch_list_count) %>%
   theme_box() %>%
   set_caption("Watchlist Colorado counties") %>%
   autofit()
-
-print(table_watchlist)
+table_watchlist
 ```
 
 *On this date, 02-01-2022, all 64 counties in Colorado had more than 100 new cases per 100,000 residents. Under those criteria, all counties match watch list conditions, and no county is "safe"*
